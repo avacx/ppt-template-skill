@@ -133,18 +133,6 @@ class PPTCloner:
     def create_from_plan(self, content_plan: List[Dict], output_path: str) -> str:
         """
         根据内容计划创建新 PPT
-        
-        content_plan 格式:
-        [
-            {
-                "template_slide": 0,  # 使用模板的第几张 (0-indexed)
-                "replacements": {
-                    "原文本": "新文本",
-                    ...
-                }
-            },
-            ...
-        ]
         """
         # 打开模板
         prs = Presentation(str(self.template_path))
@@ -160,7 +148,8 @@ class PPTCloner:
             
             slides_to_keep.append({
                 'source_idx': template_idx,
-                'replacements': item.get('replacements', {})
+                'replacements': item.get('replacements', {}),
+                'clear_unmapped': item.get('clear_unmapped', False) # 新增：是否清空未映射的文本
             })
         
         # 构建要删除的幻灯片索引列表
@@ -171,7 +160,7 @@ class PPTCloner:
         for item in slides_to_keep:
             indices_to_delete.discard(item['source_idx'])
         
-        # 按倒序删除不需要的幻灯片（避免索引变化问题）
+        # 按倒序删除不需要的幻灯片
         for idx in sorted(indices_to_delete, reverse=True):
             rId = prs.slides._sldIdLst[idx].rId
             prs.part.drop_rel(rId)
@@ -191,10 +180,7 @@ class PPTCloner:
             if source_idx in old_to_new:
                 new_idx = old_to_new[source_idx]
                 slide = prs.slides[new_idx]
-                self._apply_replacements(slide, item['replacements'])
-        
-        # 重新排序幻灯片（按 content_plan 的顺序）
-        # python-pptx 不直接支持重排，所以我们需要换一种方式
+                self._apply_replacements(slide, item['replacements'], item['clear_unmapped'])
         
         # 保存
         prs.save(output_path)
@@ -204,9 +190,6 @@ class PPTCloner:
     def create_simple(self, slide_indices: List[int], replacements_list: List[Dict], output_path: str) -> str:
         """
         简化版创建：指定要保留的幻灯片索引和对应的替换规则
-        
-        slide_indices: [0, 1, 2, 23]  # 保留第1、2、3、24张
-        replacements_list: [{...}, {...}, {...}, {...}]  # 每张的替换规则
         """
         prs = Presentation(str(self.template_path))
         total = len(prs.slides)
@@ -232,40 +215,54 @@ class PPTCloner:
             if old_idx in old_to_new and i < len(replacements_list):
                 new_idx = old_to_new[old_idx]
                 slide = prs.slides[new_idx]
-                self._apply_replacements(slide, replacements_list[i])
+                # 简化版默认清空未映射文本，确保安全
+                self._apply_replacements(slide, replacements_list[i], clear_unmapped=True)
         
         prs.save(output_path)
         print(f"✓ 已生成: {output_path}")
         return output_path
     
-    def _apply_replacements(self, slide, replacements: Dict[str, str]):
+    def _apply_replacements(self, slide, replacements: Dict[str, str], clear_unmapped: bool = False):
         """应用文本替换"""
+        mapped_shapes = set()
+
         for shape in slide.shapes:
             if not shape.has_text_frame:
                 continue
             
-            # 1. 检查名称匹配 (格式: "shape:ShapeName": "New Content")
+            # 记录哪些文本内容被匹配到了
+            is_replaced = False
+            full_text = shape.text_frame.text.strip()
             shape_name_key = f"shape:{shape.name}"
+
+            # 1. 检查名称匹配
             if shape_name_key in replacements:
                 shape.text = replacements[shape_name_key]
-                continue
+                is_replaced = True
 
-            # 2. 检查全文匹配 (如果形状的完整文本等于某个键，则全部替换)
-            full_text = shape.text_frame.text.strip()
-            if full_text in replacements:
+            # 2. 检查全文匹配
+            elif full_text in replacements:
                 shape.text = replacements[full_text]
-                continue
+                is_replaced = True
 
-            # 3. 检查段落/Run 级别的部分匹配 (现有的逻辑，但进行了增强)
-            for paragraph in shape.text_frame.paragraphs:
-                for run in paragraph.runs:
-                    if run.text:
-                        original = run.text
-                        for old_text, new_text in replacements.items():
-                            if old_text.startswith("shape:"): continue
-                            if old_text in original:
-                                run.text = original.replace(old_text, new_text)
-                                original = run.text
+            # 3. 检查段落/Run 级别的部分匹配
+            else:
+                for paragraph in shape.text_frame.paragraphs:
+                    for run in paragraph.runs:
+                        if run.text:
+                            original = run.text
+                            for old_text, new_text in replacements.items():
+                                if old_text.startswith("shape:"): continue
+                                if old_text in original:
+                                    run.text = original.replace(old_text, new_text)
+                                    original = run.text
+                                    is_replaced = True
+
+            # 4. 如果启用了强制清空且该形状没有任何匹配，则清空内容
+            if clear_unmapped and not is_replaced and full_text:
+                # 只针对含有实质性文本的形状进行清空（排除页码等非常短的元素）
+                if len(full_text) > 1: 
+                    shape.text = ""
     
     def print_analysis(self):
         """打印分析结果"""
@@ -290,12 +287,13 @@ class PPTCloner:
             print(f"       预览: {preview}...")
             
             if slide['text_elements']:
-                print("       可替换文本:")
-                for te in slide['text_elements'][:5]:
-                    text = te['text'][:50]
-                    print(f"         - \"{text}\"")
-                if len(slide['text_elements']) > 5:
-                    print(f"         ... 还有 {len(slide['text_elements']) - 5} 个")
+                print("       可替换内容 (支持文本匹配或 shape 名称匹配):")
+                for te in slide['text_elements'][:10]:
+                    shape_name = te['shape_name']
+                    text = te['text'].replace('\n', '\\n')[:100]
+                    print(f"         - [shape:{shape_name}] -> \"{text}\"")
+                if len(slide['text_elements']) > 10:
+                    print(f"         ... 还有 {len(slide['text_elements']) - 10} 个")
         
         print("\n" + "=" * 70)
     

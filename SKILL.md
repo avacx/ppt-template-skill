@@ -35,26 +35,27 @@ Example for "AI Introduction":
 - **Slide 3 (Divider)**: Title: "Chapter 1: Foundations"
 - **Slide 4 (Content)**: Title: "What is AI?", Body: "Artificial Intelligence is the simulation of human intelligence..."
 
-### Step 3: Map Content to Template
+### Step 3: Map Content to Template (Zero-Remnant Strategy)
 
-Create a `plan.json` that maps your generated content to the specific strings found in Step 1.
+Create a `plan.json` that maps your generated content. To ensure **Zero Remnants** (no template text left over), use the following strategy:
 
-**Strategy for "Full Replacement":**
-- Find the most prominent text in a template slide (e.g., "Company Profile") and replace it with your new slide title (e.g., "What is AI?").
-- Replace body text placeholders (e.g., "Enter description here") with your detailed content.
-- Use the `shape:Name` syntax if you need to target a specific box precisely (found in analysis).
+1.  **Strict Mode**: Set `"clear_unmapped": true` for each slide in your plan. This will automatically wipe any text box that isn't explicitly replaced in your `replacements` dictionary.
+2.  **Exhaustive Mapping**: Replace every significant text shape identified in Step 1.
 
 ```json
 [
     {
         "template_slide": 0,
+        "clear_unmapped": true,
         "replacements": {
-            "Original Template Title": "The Future of AI",
-            "Subtitle Placeholder": "Understanding Intelligence in the Digital Age"
+            "shape:文本框 32": "The Future of AI"
         }
     }
 ]
 ```
+
+**Why use `clear_unmapped`?**
+Templates often contain background text (e.g., "Company Slogan", "Confidential") or multiple bullet points you don't need. Enabling this flag ensures only *your* content is visible on the slide.
 
 ### Step 3: Generate the PPT
 
