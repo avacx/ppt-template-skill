@@ -1,0 +1,24 @@
+[
+    {
+        "template_slide": 0,
+        "replacements": {
+            "Template Title": "My New Presentation",
+            "Subtitle": "Created with ppt-from-template skill"
+        }
+    },
+    {
+        "template_slide": 1,
+        "replacements": {
+            "Section 1": "Introduction",
+            "Section 2": "Main Content",
+            "Section 3": "Conclusion"
+        }
+    },
+    {
+        "template_slide": 2,
+        "replacements": {
+            "01": "01",
+            "Section Title": "Introduction"
+        }
+    }
+]
