@@ -244,11 +244,25 @@ class PPTCloner:
             if not shape.has_text_frame:
                 continue
             
+            # 1. 检查名称匹配 (格式: "shape:ShapeName": "New Content")
+            shape_name_key = f"shape:{shape.name}"
+            if shape_name_key in replacements:
+                shape.text = replacements[shape_name_key]
+                continue
+
+            # 2. 检查全文匹配 (如果形状的完整文本等于某个键，则全部替换)
+            full_text = shape.text_frame.text.strip()
+            if full_text in replacements:
+                shape.text = replacements[full_text]
+                continue
+
+            # 3. 检查段落/Run 级别的部分匹配 (现有的逻辑，但进行了增强)
             for paragraph in shape.text_frame.paragraphs:
                 for run in paragraph.runs:
                     if run.text:
                         original = run.text
                         for old_text, new_text in replacements.items():
+                            if old_text.startswith("shape:"): continue
                             if old_text in original:
                                 run.text = original.replace(old_text, new_text)
                                 original = run.text

@@ -15,46 +15,46 @@ Create new PowerPoint presentations by cloning slides from an existing template 
 
 ## Workflow
 
-### Step 1: Analyze the Template
+### Step 1: Analyze the Template Structure
 
-When the user provides a template path, first analyze its structure:
+When the user provides a template path, first analyze it to understand what slides are available and what text they contain:
 
 ```bash
 python3 {{SKILL_PATH}}/scripts/ppt_cloner.py analyze "/path/to/template.pptx"
 ```
 
-This outputs:
-- Total slide count
-- Slide types (cover, toc, divider, content, ending)
-- Text elements that can be replaced on each slide
-- Preview of existing content
+**Crucial**: Pay attention to the "Slide Types" (cover, toc, divider, content) and the "Text Elements" found on each slide. You will need these to map your new content.
 
-### Step 2: Plan the Content
+### Step 2: Generate New Content (AI's Main Task)
 
-Based on the analysis and user requirements, create a content plan JSON file:
+Based on the user's topic, you MUST generate a complete, structured outline. Do not just replace titles; transform the entire presentation.
+
+Example for "AI Introduction":
+- **Slide 1 (Cover)**: Title: "The Future of AI", Subtitle: "Understanding Intelligence in the Digital Age"
+- **Slide 2 (TOC)**: Points: "1. Definition, 2. History, 3. Main Technologies, 4. Ethics"
+- **Slide 3 (Divider)**: Title: "Chapter 1: Foundations"
+- **Slide 4 (Content)**: Title: "What is AI?", Body: "Artificial Intelligence is the simulation of human intelligence..."
+
+### Step 3: Map Content to Template
+
+Create a `plan.json` that maps your generated content to the specific strings found in Step 1.
+
+**Strategy for "Full Replacement":**
+- Find the most prominent text in a template slide (e.g., "Company Profile") and replace it with your new slide title (e.g., "What is AI?").
+- Replace body text placeholders (e.g., "Enter description here") with your detailed content.
+- Use the `shape:Name` syntax if you need to target a specific box precisely (found in analysis).
 
 ```json
 [
     {
         "template_slide": 0,
         "replacements": {
-            "Original Title": "New Title",
-            "Original Subtitle": "New Subtitle"
-        }
-    },
-    {
-        "template_slide": 1,
-        "replacements": {
-            "Chapter 1": "Introduction",
-            "Chapter 2": "Main Content"
+            "Original Template Title": "The Future of AI",
+            "Subtitle Placeholder": "Understanding Intelligence in the Digital Age"
         }
     }
 ]
 ```
-
-**Fields:**
-- `template_slide`: Which slide from the template to use (0-indexed)
-- `replacements`: Text replacement rules (exact match required)
 
 ### Step 3: Generate the PPT
 
@@ -116,14 +116,13 @@ python3 {{SKILL_PATH}}/scripts/ppt_cloner.py create "/Users/xxx/company_template
 
 5. **Inform user:** "Generated `/Users/xxx/Q4_Report.pptx`"
 
-## Key Features
+## Comprehensive Transformation Tips
 
-| Feature | Description |
-|---------|-------------|
-| **Perfect Style Preservation** | All backgrounds, logos, shapes, animations are preserved |
-| **No Warning Dialogs** | Uses python-pptx native API, no "content has issues" popups |
-| **Format Retention** | Replaced text keeps original font, size, color |
-| **Flexible Selection** | Choose any slides from template in any order |
+To ensure a "Safe" and complete replacement where no old template content remains:
+
+1.  **Exhaustive Mapping**: Ensure every text string you see in the `analyze` output for a slide is included in your `replacements` dictionary for that slide. If you don't have new content for a specific box, replace its text with an empty string `""` or a space `" "`.
+2.  **Slide Selection**: If the template has 50 slides but you only need 5, only include those 5 indices in your `plan.json`. The generator will automatically delete all other slides.
+3.  **Consistency**: Use the same "Divider" slide style for all your chapter slides by referencing the same `template_slide` index multiple times in your plan.
 
 ## Slide Type Detection
 
